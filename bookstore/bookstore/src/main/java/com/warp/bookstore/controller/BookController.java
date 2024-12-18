@@ -1,7 +1,10 @@
 package com.warp.bookstore.controller;
 
-import com.warp.bookstore.entity.Book;
+import com.warp.bookstore.data.dto.BookRequest;
+import com.warp.bookstore.data.dto.BookResponse;
+import com.warp.bookstore.data.entity.Book;
 import com.warp.bookstore.exception.ParameterLengthException;
+import com.warp.bookstore.helper.BookMapper;
 import com.warp.bookstore.service.BookService;
 import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
@@ -19,54 +22,34 @@ public class BookController {
     @Autowired
     private BookService bookService;
 
-    @PostMapping("addBook")
-    public ResponseEntity saveBook(@RequestBody Book book) {
-
-        try {
-            Book book1 = bookService.saveBook(book);
-            return new ResponseEntity<>(book1, HttpStatus.OK) ;
-        } catch (ParameterLengthException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
-        } catch (EntityExistsException ex) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
-        }
+    @PostMapping()
+    public ResponseEntity<BookResponse> saveBook(@RequestBody BookRequest book) throws ParameterLengthException,EntityExistsException {
+        return new ResponseEntity<>(bookService.saveBook(book), HttpStatus.OK) ;
     }
 
-    @GetMapping("find-book")
-    public ResponseEntity<Book> getBook(@RequestParam String title,@RequestParam String author) {
-        return ResponseEntity.status(HttpStatus.OK).body(bookService.findByTitleAndAuthor(title,author));
+    @GetMapping("{id}")
+    public ResponseEntity<BookResponse> getBook(@PathVariable("id") Long id) {
+        return ResponseEntity.status(HttpStatus.OK).body(bookService.findById(id));
     }
 
-    @GetMapping("search-book")
-    public ResponseEntity<List<Book>> searchBook(@RequestParam String searchValue) {
-        return ResponseEntity.status(HttpStatus.OK).body(bookService.searchBysearchField(searchValue));
+    @GetMapping("search-book/{searchValue}")
+    public ResponseEntity<List<BookResponse>> searchBook(@PathVariable("searchValue") String searchValue) {
+        return ResponseEntity.status(HttpStatus.OK).body(bookService.searchBySearchField(searchValue));
     }
 
     @GetMapping("get-books")
-    public ResponseEntity<List<Book>> getBooks() {
+    public ResponseEntity<List<BookResponse>> getBooks() {
        return ResponseEntity.status(HttpStatus.OK).body(bookService.getAllBooks());
     }
 
-    @DeleteMapping("delete-book")
-    public ResponseEntity<String> deleteBook(@RequestParam String isbn) {
-        try {
-            return ResponseEntity.status(HttpStatus.OK).body(bookService.deleteBookRecord(isbn));
-        } catch (EntityNotFoundException ex) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(ex.getMessage());
-        }
+    @DeleteMapping("delete-book/{id}")
+    public ResponseEntity<String> deleteBook(@PathVariable("id") Long id) throws EntityNotFoundException{
+        return ResponseEntity.status(HttpStatus.OK).body(bookService.deleteBookRecord(id));
     }
 
     @PostMapping("update-book")
-    public ResponseEntity updatseBook(@RequestBody Book book) {
-        try {
-            return ResponseEntity.status(HttpStatus.OK).body(bookService.updateBook(book));
-        } catch (EntityNotFoundException ex) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(ex.getMessage());
-        }
+    public ResponseEntity<BookResponse> updateBook(@RequestBody Book book) throws EntityNotFoundException,ParameterLengthException {
+        return ResponseEntity.status(HttpStatus.OK).body(bookService.updateBook(book));
     }
 
-    @GetMapping("testIsbn")
-    public String getIsbn(){
-        return bookService.calculateCheckValue("978030640615");
-    }
 }

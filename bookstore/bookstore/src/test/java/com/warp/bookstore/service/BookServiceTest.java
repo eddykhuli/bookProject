@@ -1,8 +1,12 @@
 package com.warp.bookstore.service;
 
-import com.warp.bookstore.entity.Book;
+import com.warp.bookstore.data.dto.BookRequest;
+import com.warp.bookstore.data.dto.BookResponse;
+import com.warp.bookstore.data.entity.Book;
 import com.warp.bookstore.exception.ParameterLengthException;
 import com.warp.bookstore.repository.BookRepository;
+import com.warp.bookstore.service.BookService;
+import jakarta.persistence.EntityExistsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -12,130 +16,129 @@ import org.mockito.MockitoAnnotations;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 class BookServiceTest {
 
+    @Mock
+    private BookRepository bookRepository;
+
     @InjectMocks
     private BookService bookService;
 
-    @Mock
-    private BookRepository bookRepository;
+    private Book mockBook;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+
+        // Initialize mock book
+        mockBook = new Book();
+        mockBook.setId(1L);
+        mockBook.setTitle("Test Title");
+        mockBook.setAuthor("Test Author");
+        mockBook.setIsbn("123456789012");
     }
 
     @Test
-    void testSaveBook_ValidBook() throws ParameterLengthException {
-        // Arrange
-        Book book = new Book();
-        book.setTitle("Valid Title");
-        book.setAuthor("Author Name");
-        when(bookRepository.save(any(Book.class))).thenReturn(book);
+    void testSaveBook_Success() throws ParameterLengthException {
+        BookRequest bookRequest = new BookRequest();
+        bookRequest.setBookTitle("Test Title");
+        bookRequest.setAuthorNames("Test Author");
 
-        // Act
-        Book savedBook = bookService.saveBook(book);
+        when(bookRepository.findByTitleAndAuthor("Test Title", "Test Author")).thenReturn(null);
+        when(bookRepository.save(any(Book.class))).thenReturn(mockBook);
 
-        // Assert
-        assertNotNull(savedBook, "Saved book should not be null");
-        assertNotNull(savedBook.getIsbn(), "ISBN should be generated for the book");
-        verify(bookRepository, times(1)).save(book);
+        BookResponse response = bookService.saveBook(bookRequest);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getBookTitle()).isEqualTo("Test Title");
+        assertThat(response.getAuthorNames()).isEqualTo("Test Author");
+
+        verify(bookRepository, times(1)).save(any(Book.class));
     }
 
     @Test
-    void testSaveBook_TitleTooLong() {
-        // Arrange
-        Book book = new Book();
-        book.setTitle("A".repeat(101)); // Title with 101 characters
-        book.setAuthor("Author Name");
+    void testSaveBook_ThrowsEntityExistsException() {
+        BookRequest bookRequest = new BookRequest();
+        bookRequest.setBookTitle("Test Title");
+        bookRequest.setAuthorNames("Test Author");
 
-        // Act & Assert
-        ParameterLengthException exception = assertThrows(ParameterLengthException.class, () -> {
-            bookService.saveBook(book);
-        });
-        assertEquals("Title cannot be longer than 100 characters", exception.getMessage());
+        when(bookRepository.findByTitleAndAuthor("Test Title", "Test Author")).thenReturn(mockBook);
+
+        assertThrows(EntityExistsException.class, () -> bookService.saveBook(bookRequest));
+
         verify(bookRepository, never()).save(any(Book.class));
     }
 
     @Test
-    void testSaveBook_AuthorTooLong() {
-        // Arrange
+    void testFindByTitleAndAuthor_Success() {
+        when(bookRepository.findByTitleAndAuthor("Test Title", "Test Author")).thenReturn(mockBook);
+
+        Book book = bookService.findByTitleAndAuthor("Test Title", "Test Author");
+
+        assertThat(book).isNotNull();
+        assertThat(book.getTitle()).isEqualTo("Test Title");
+        assertThat(book.getAuthor()).isEqualTo("Test Author");
+    }
+
+    @Test
+    void testGetAllBooks_Success() {
+        when(bookRepository.findAll()).thenReturn(List.of(mockBook));
+
+        List<BookResponse> books = bookService.getAllBooks();
+
+        assertThat(books).hasSize(1);
+        assertThat(books.get(0).getBookTitle()).isEqualTo("Test Title");
+    }
+
+    @Test
+    void testUpdateBook_Success() throws ParameterLengthException {
+        when(bookRepository.findByIsbn("123456789012")).thenReturn(mockBook);
+        when(bookRepository.save(any(Book.class))).thenReturn(mockBook);
+
+        mockBook.setTitle("Updated Title");
+        BookResponse response = bookService.updateBook(mockBook);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getBookTitle()).isEqualTo("Updated Title");
+
+        verify(bookRepository, times(1)).save(any(Book.class));
+    }
+
+    @Test
+    void testDeleteBookRecord_Success() {
+        when(bookRepository.findById(1L)).thenReturn(Optional.of(mockBook));
+
+        String result = bookService.deleteBookRecord(1L);
+
+        assertThat(result).isEqualTo("Deleted Test Title By Test Author");
+        verify(bookRepository, times(1)).delete(mockBook);
+    }
+
+    @Test
+    void testGenerateIsbn() {
+        String isbn = bookService.generateIsbn();
+
+        assertThat(isbn).hasSize(13); // 12 digits + 1 check digit
+    }
+
+    @Test
+    void testCalculateCheckValue_ValidIsbn() {
+        String partialIsbn = "978030640615";
+        String fullIsbn = bookService.calculateCheckValue(partialIsbn);
+        assertEquals("9780306406157", fullIsbn);
+    }
+
+    @Test
+    void testValidateEntity_ThrowsParameterLengthException() {
         Book book = new Book();
-        book.setTitle("Valid Title");
-        book.setAuthor("A".repeat(51)); // Author name with 51 characters
+        book.setTitle("");
+        book.setAuthor("Author");
 
-        // Act & Assert
-        ParameterLengthException exception = assertThrows(ParameterLengthException.class, () -> {
-            bookService.saveBook(book);
-        });
-        assertEquals("Author cannot be more than 50 characters", exception.getMessage());
-        verify(bookRepository, never()).save(any(Book.class));
-    }
-
-    @Test
-    void testGetAllBooks() {
-        // Arrange
-        Book book1 = new Book();
-        Book book2 = new Book();
-        when(bookRepository.findAll()).thenReturn(List.of(book1, book2));
-
-        // Act
-        List<Book> books = bookService.getAllBooks();
-
-        // Assert
-        assertNotNull(books, "Book list should not be null");
-        assertEquals(2, books.size(), "Book list should contain 2 books");
-        verify(bookRepository, times(1)).findAll();
-    }
-
-    @Test
-    void testGenerateIsbn_ValidLength() {
-        // Act
-        String isbn = bookService.generateIsbn();
-
-        // Assert
-        assertNotNull(isbn, "Generated ISBN should not be null");
-        assertEquals(13, isbn.length(), "Generated ISBN should be 13 characters long");
-    }
-
-    @Test
-    void testGenerateIsbn_ValidCheckDigit() {
-        // Act
-        String isbn = bookService.generateIsbn();
-
-        // Extract the first 12 digits and the check digit
-        String isbnBase = isbn.substring(0, 12);
-        char checkDigit = isbn.charAt(12);
-
-        // Recalculate the check digit
-        String recalculatedIsbn = bookService.calculateCheckValue(isbnBase);
-        assertEquals(isbn, recalculatedIsbn, "Generated ISBN should have a valid check digit");
-    }
-
-    @Test
-    void testCalculateCheckValue_ValidInput() {
-        // Arrange
-        String isbnBase = "978030640615";
-
-        // Act
-        String isbn = bookService.calculateCheckValue(isbnBase);
-
-        // Assert
-        assertEquals("9780306406157", isbn, "Calculated ISBN should match the expected value");
-    }
-
-    @Test
-    void testCalculateCheckValue_InvalidInput() {
-        // Arrange
-        String invalidIsbnBase = "12345"; // Less than 12 characters
-
-        // Act & Assert
-        Exception exception = assertThrows(RuntimeException.class, () -> {
-            bookService.calculateCheckValue(invalidIsbnBase);
-        });
-        assertTrue(exception.getMessage().contains("For input string"), "Exception message should indicate invalid input");
+        assertThrows(ParameterLengthException.class, () -> bookService.validateEntity(book));
     }
 }

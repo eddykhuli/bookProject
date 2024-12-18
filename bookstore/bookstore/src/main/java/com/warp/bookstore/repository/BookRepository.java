@@ -1,6 +1,6 @@
 package com.warp.bookstore.repository;
 
-import com.warp.bookstore.entity.Book;
+import com.warp.bookstore.data.entity.Book;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
